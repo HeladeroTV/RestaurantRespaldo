@@ -307,24 +307,10 @@ def crear_vista_inventario(inventory_service, on_update_ui, page):
                 print(f"Ítem con ID {item_id} no encontrado.")
                 return
 
-            # Verificar si la cantidad es mayor a 0
-            if item_a_eliminar['cantidad_disponible'] > 0:
-                print(f"No se puede eliminar el ítem '{item_a_eliminar['nombre']}' porque tiene {item_a_eliminar['cantidad_disponible']} unidades disponibles.")
-                # Mostrar una alerta en la interfaz de Flet
-                def cerrar_alerta(e):
-                    page.close(dlg_error)
-                
-                dlg_error = ft.AlertDialog(
-                    title=ft.Text("No se puede eliminar"),
-                    content=ft.Text(f"No se puede eliminar '{item_a_eliminar['nombre']}' porque tiene {item_a_eliminar['cantidad_disponible']} unidades disponibles."),
-                    actions=[ft.TextButton("Aceptar", on_click=cerrar_alerta)],
-                    actions_alignment=ft.MainAxisAlignment.END,
-                )
-                page.dialog = dlg_error
-                dlg_error.open = True
-                page.update()
-                return # Salir de la función sin eliminar
-            # --- FIN MODIFICACIÓN ---
+            # --- CHECK REMOVED: Allow deletion regardless of stock ---
+            # (Previously checked if item_a_eliminar['cantidad_disponible'] > 0)
+            pass
+            # --- FIN CHECK REMOVED ---
 
             inventory_service.eliminar_item_inventario(item_id)
             on_update_ui() # Actualiza toda la UI, incluyendo inventario
