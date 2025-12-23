@@ -347,7 +347,7 @@ def crear_vista_reportes(backend_service, on_update_ui, page):
             if datos.get('productos_mas_vendidos'):
                 nombres_pv = [p['nombre'] for p in datos['productos_mas_vendidos']]
                 cantidades_pv = [p['cantidad'] for p in datos['productos_mas_vendidos']]
-                fig_pv = px.bar(x=cantidades_pv, y=nombres_pv, orientation='h', title='Productos Más Vendidos (General)', labels={'x': 'Cantidad', 'y': 'Producto'})
+                fig_pv = px.bar(x=nombres_pv, y=cantidades_pv, orientation='v', title='Productos Más Vendidos (General)', labels={'x': 'Producto', 'y': 'Cantidad'})
                 fig_pv.update_layout(height=300)
                 # Convertir a bytes y actualizar imagen
                 img_bytes_pv = fig_pv.to_image(format="png", width=600, height=300, scale=1)
@@ -378,7 +378,7 @@ def crear_vista_reportes(backend_service, on_update_ui, page):
                 # Crear gráfico de barras (o scatter) de tiempos por pedido
                 # Truncar IDs si son muy largos para la visualización
                 labels_pedidos = [f"Pedido {p['id']}" for p in detalle_pedidos_cocina]
-                fig_eficiencia = px.bar(x=tiempos_cocina, y=labels_pedidos, orientation='h', title=f'Tiempos de Cocina - {tipo} ({fecha_str})', labels={'x': 'Tiempo (min)', 'y': 'Pedido'})
+                fig_eficiencia = px.bar(x=labels_pedidos, y=tiempos_cocina, orientation='v', title=f'Tiempos de Cocina - {tipo} ({fecha_str})', labels={'x': 'Pedido', 'y': 'Tiempo (min)'})
                 fig_eficiencia.add_hline(y=promedio_cocina_min, line_dash="dash", line_color="red", annotation_text=f"Promedio: {promedio_cocina_min:.2f} min")
                 fig_eficiencia.update_layout(height=300)
                 # Convertir a bytes y actualizar imagen
@@ -445,7 +445,7 @@ def crear_vista_reportes(backend_service, on_update_ui, page):
             if datos_analisis.get('productos_mas_vendidos'):
                 nombres_am = [p['nombre'] for p in datos_analisis['productos_mas_vendidos']]
                 cantidades_am = [p['cantidad'] for p in datos_analisis['productos_mas_vendidos']]
-                fig_am = px.bar(x=cantidades_am, y=nombres_am, orientation='h', title='Análisis - Más Vendidos', labels={'x': 'Cantidad', 'y': 'Producto'})
+                fig_am = px.bar(x=nombres_am, y=cantidades_am, orientation='v', title='Análisis - Más Vendidos', labels={'x': 'Producto', 'y': 'Cantidad'})
                 fig_am.update_layout(height=300)
                 # Convertir a bytes y actualizar imagen
                 img_bytes_am = fig_am.to_image(format="png", width=600, height=300, scale=1)
@@ -457,7 +457,7 @@ def crear_vista_reportes(backend_service, on_update_ui, page):
             if datos_analisis.get('productos_menos_vendidos'):
                 nombres_anm = [p['nombre'] for p in datos_analisis['productos_menos_vendidos']]
                 cantidades_anm = [p['cantidad'] for p in datos_analisis['productos_menos_vendidos']]
-                fig_anm = px.bar(x=cantidades_anm, y=nombres_anm, orientation='h', title='Análisis - Menos Vendidos', labels={'x': 'Cantidad', 'y': 'Producto'})
+                fig_anm = px.bar(x=nombres_anm, y=cantidades_anm, orientation='v', title='Análisis - Menos Vendidos', labels={'x': 'Producto', 'y': 'Cantidad'})
                 fig_anm.update_layout(height=300)
                 # Convertir a bytes y actualizar imagen
                 img_bytes_anm = fig_anm.to_image(format="png", width=600, height=300, scale=1)
