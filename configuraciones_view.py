@@ -2,7 +2,7 @@
 import flet as ft
 from typing import List, Dict, Any
 
-def crear_vista_configuraciones(config_service, inventory_service, on_update_ui, page):  # ✅ AGREGAR INVENTORY_SERVICE
+def crear_vista_configuraciones(config_service, inventory_service, backend_service, on_update_ui, page):  # ✅ AGREGAR INVENTORY_SERVICE Y BACKEND_SERVICE
     # Campos de entrada
     nombre_input = ft.TextField(label="Nombre de la configuración", width=300)
     descripcion_input = ft.TextField(label="Descripción", multiline=True, width=300)
@@ -237,6 +237,29 @@ def crear_vista_configuraciones(config_service, inventory_service, on_update_ui,
         except Exception as e:
             print(f"Error al cargar configuraciones: {e}")
 
+    # --- NUEVA FUNCIÓN: crear_respaldo_click ---
+    def crear_respaldo_click(e):
+        try:
+            # Mostrar indicador de carga (opcional, o deshabilitar botón)
+            
+            respuesta = backend_service.crear_respaldo()
+            
+            if respuesta.get("status") == "ok":
+                ruta = respuesta.get("file_path", "")
+                page.snack_bar = ft.SnackBar(ft.Text(f"Respaldo creado con éxito en: {ruta}"), bgcolor=ft.Colors.GREEN_700)
+            else:
+                detalle = respuesta.get("message", "Error desconocido")
+                page.snack_bar = ft.SnackBar(ft.Text(f"Error al crear respaldo: {detalle}"), bgcolor=ft.Colors.RED_700)
+            
+            page.snack_bar.open = True
+            page.update()
+        except Exception as ex:
+            print(f"Error al crear respaldo: {ex}")
+            page.snack_bar = ft.SnackBar(ft.Text(f"Error crítico al conectar: {ex}"), bgcolor=ft.Colors.RED_700)
+            page.snack_bar.open = True
+            page.update()
+    # --- FIN NUEVA FUNCIÓN ---
+
     # ✅ CARGAR CONFIGURACIONES AL INICIAR
     actualizar_lista_configuraciones_guardadas()
 
@@ -275,7 +298,24 @@ def crear_vista_configuraciones(config_service, inventory_service, on_update_ui,
             ),
             ft.Divider(),
             ft.Text("Configuraciones guardadas", size=18, weight=ft.FontWeight.BOLD),
-            lista_configuraciones_guardadas  # ✅ LISTA DE CONFIGURACIONES
+            lista_configuraciones_guardadas,  # ✅ LISTA DE CONFIGURACIONES
+            ft.Divider(),
+            ft.Text("Seguridad y Datos", size=18, weight=ft.FontWeight.BOLD),
+            ft.Container(
+                content=ft.Column([
+                    ft.Text("Copia de Seguridad de la Base de Datos", size=16),
+                    ft.Text("Genera un archivo SQL con todos los datos actuales del sistema. Se guardará en la carpeta 'Backups_RestaurantPRO' en tu Escritorio.", size=12, color=ft.Colors.GREY_400),
+                    ft.ElevatedButton(
+                        "Crear Respaldo Ahora",
+                        icon=ft.Icons.SAVE,
+                        on_click=crear_respaldo_click,
+                        style=ft.ButtonStyle(bgcolor=ft.Colors.BLUE_700, color=ft.Colors.WHITE)
+                    )
+                ]),
+                bgcolor=ft.Colors.BLUE_GREY_900,
+                padding=15,
+                border_radius=10
+            )
         ]),
         padding=20,
         expand=True

@@ -1384,6 +1384,7 @@ class RestauranteGUI:
         self.vista_configuraciones = crear_vista_configuraciones(
             self.config_service,
             self.inventory_service,
+            self.backend_service, # ✅ AÑADIDO: Pasar backend_service
             self.actualizar_ui_completo,
             page
         )

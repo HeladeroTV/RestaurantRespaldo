@@ -254,3 +254,17 @@ class BackendService:
         r.raise_for_status()
         return r.json()
     # --- FIN NUEVO MÉTODO ---
+
+    # === MÉTODO: crear_respaldo ===
+    def crear_respaldo(self) -> Dict[str, Any]:
+        """
+        Solicita al backend crear un respaldo de la base de datos.
+        """
+        r = requests.post(f"{self.base_url}/backup")
+        if r.status_code != 200:
+            try:
+                error_detail = r.json().get('detail', r.text)
+            except ValueError:
+                error_detail = r.text
+            raise Exception(f"Error del backend ({r.status_code}): {error_detail}")
+        return r.json()

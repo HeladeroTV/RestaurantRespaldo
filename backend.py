@@ -8,6 +8,10 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import json
 from datetime import datetime, date, timedelta
+import subprocess
+import os
+import shutil
+import glob
 
 # IMPORTAR LA SUB-APP DE INVENTARIO
 from inventario_backend import inventario_app
@@ -15,7 +19,7 @@ from configuraciones_backend import configuraciones_app
 from fastapi import Query 
 from fastapi import FastAPI, HTTPException, Depends, Query # Asegúrate de tener Query importado
 from recetas_backend import recetas_app
-
+from backend_service import BackendService
 
 app = FastAPI(title="RestaurantIA Backend")
 
@@ -77,6 +81,11 @@ class ReservaCreate(BaseModel):
     cliente_id: int
     fecha_hora_inicio: str  # "YYYY-MM-DD HH:MM:SS"
     fecha_hora_fin: Optional[str] = None # "YYYY-MM-DD HH:MM:SS"
+
+class BackupResponse(BaseModel):
+    status: str
+    message: str
+    file_path: str
 
 # Endpoints
 @app.get("/health")
@@ -797,6 +806,93 @@ def obtener_mesas_disponibles_para_fecha_hora(
                 -- Asumimos una duración de 1 hora si no se especifica fin
             """, (fecha_hora_obj,))
             reservadas_db = set(row['mesa_numero'] for row in cursor.fetchall())
+        
+        # Combinar resultados (similar lógica que en obtener_mesas_detalladas pero simplificada para disponibilidad)
+        # ... (Implementar lógica completa si se necesita este endpoint)
+        pass 
+    except Exception as e:
+        print(f"Error en obtener_mesas_disponibles: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- ENDPOINT DE RESPALDO (BACKUP) ---
+
+def find_pg_dump():
+    """Busca el ejecutable pg_dump en el PATH y en rutas comunes de Windows."""
+    # 1. Buscar en el PATH del sistema
+    path_in_path = shutil.which("pg_dump")
+    if path_in_path:
+        return path_in_path
+    
+    # 2. Buscar en directorios de instalación estándar de PostgreSQL
+    # Buscará en todas las versiones encontradas en Program Files
+    possible_paths = glob.glob("C:/Program Files/PostgreSQL/*/bin/pg_dump.exe")
+    
+    if possible_paths:
+        # Ordenar para tomar la versión más reciente (alfabéticamente la carpeta de número mayor va al final usualmente)
+        possible_paths.sort() 
+        return possible_paths[-1]
+    
+    return None
+
+@app.post("/backup", response_model=BackupResponse)
+def crear_respaldo():
+    """
+    Crea un respaldo de la base de datos PostgreSQL usando pg_dump.
+    """
+    try:
+        # 0. Encontrar pg_dump
+        pg_dump_exe = find_pg_dump()
+        if not pg_dump_exe:
+            raise HTTPException(status_code=500, detail="No se encontró el ejecutable pg_dump. Por favor instale PostgreSQL o agréguelo al PATH.")
+
+        # 1. Definir directorio de respaldos
+        # Usaremos una carpeta en el escritorio del usuario para fácil acceso
+        desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+        backup_dir = os.path.join(desktop_path, "Backups_RestaurantPRO")
+        
+        if not os.path.exists(backup_dir):
+            os.makedirs(backup_dir)
+            
+        # 2. Definir nombre del archivo con fecha y hora
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"backup_restaurant_db_{timestamp}.sql"
+        filepath = os.path.join(backup_dir, filename)
+        
+        # 3. Configurar comando pg_dump
+        # Asumimos que la contraseña es 'postgres' como en DATABASE_URL
+        env = os.environ.copy()
+        env["PGPASSWORD"] = "postgres"
+        
+        # Comando: pg_dump -U postgres -h localhost -p 5432 -d restaurant_db -f "filepath"
+        command = [
+            pg_dump_exe,
+            "-U", "postgres",
+            "-h", "localhost",
+            "-p", "5432",
+            "-d", "restaurant_db",
+            "-f", filepath
+        ]
+        
+        # 4. Ejecutar comando
+        result = subprocess.run(command, env=env, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            return {
+                "status": "ok", 
+                "message": "Respaldo creado exitosamente.", 
+                "file_path": filepath
+            }
+        else:
+            error_msg = f"Error al ejecutar pg_dump: {result.stderr}"
+            print(error_msg)
+            raise HTTPException(status_code=500, detail=error_msg)
+            
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print(f"Error general en backup: {e}")
+        raise HTTPException(status_code=500, detail=f"Error creando respaldo: {str(e)}")
+
 
         mesas_disponibles = []
         for mesa in mesas_db:
