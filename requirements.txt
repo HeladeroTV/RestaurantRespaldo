@@ -1,0 +1,11 @@
+# Core application dependencies
+# Chosen to stay on Pydantic v1.x so existing BaseSettings / BaseModel code works
+# If you later migrate to Pydantic v2, you'll also need the 'pydantic-settings' package
+fastapi==0.103.2            # FastAPI version still compatible with pydantic<2
+pydantic==1.10.13           # Keep <2 until explicit migration
+uvicorn[standard]==0.23.2   # ASGI server for FastAPI
+flet==0.28.3                # UI framework used in app.py / inventario_view.py
+requests==2.31.0            # HTTP client for service calls
+psycopg2-binary==2.9.9      # PostgreSQL driver (binary build for easier local install)
+
+# (Optional) add a production-grade process manager later, e.g. 'gunicorn' with 'uvicorn.workers.UvicornWorker'
