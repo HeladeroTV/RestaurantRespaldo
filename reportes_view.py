@@ -5,6 +5,10 @@ import plotly.graph_objects as go
 import plotly.express as px
 import io
 import base64
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+import os
 # --- FIN IMPORTAR ---
 from typing import List, Dict, Any
 from datetime import datetime, timedelta
@@ -34,7 +38,117 @@ def crear_vista_reportes(backend_service, on_update_ui, page):
     )
     fecha_text = ft.Text("Fecha: Hoy", size=16)
 
-    # Contenedor para mostrar el reporte general (EXISTENTE)
+    # --- DATOS PARA PDF (Variable de estado) ---
+    # Almacenaremos los bytes de las imágenes y los textos para usarlos en el PDF
+    estado_reporte = {
+        "tipo": "",
+        "fecha": "",
+        "textos": [],
+        "img_resumen": None,
+        "img_productos": None,
+        "img_horas": None,
+        "img_analisis_mas": None,
+        "img_analisis_menos": None,
+        "img_eficiencia": None
+    }
+
+    def guardar_pdf(e: ft.FilePickerResultEvent):
+        if e.path:
+            try:
+                c = canvas.Canvas(e.path, pagesize=letter)
+                width, height = letter
+                
+                # Encabezado
+                c.setFont("Helvetica-Bold", 18)
+                c.drawString(50, height - 50, f"Reporte {estado_reporte['tipo']}")
+                c.setFont("Helvetica", 12)
+                c.drawString(50, height - 70, f"Fecha: {estado_reporte['fecha']}")
+                
+                # Textos Resumen
+                y = height - 100
+                c.setFont("Helvetica", 10)
+                for linea in estado_reporte["textos"]:
+                    # Ignorar algunas líneas decorativas o repetitivas si se desea
+                    if isinstance(linea, str) and "---" not in linea:
+                         c.drawString(50, y, linea)
+                         y -= 15
+                    if y < 50: # Nueva página si se acaba el espacio
+                        c.showPage()
+                        y = height - 50
+
+                # Función auxiliar para dibujar imagen
+                def dibujar_imagen(img_bytes, x, y, w, h):
+                    if img_bytes:
+                        try:
+                            # Plotly to_image devuelve bytes, ReportLab ImageReader los puede leer
+                            image = ImageReader(io.BytesIO(img_bytes))
+                            c.drawImage(image, x, y, width=w, height=h)
+                            return True
+                        except Exception as ex:
+                            print(f"Error dibujando imagen: {ex}")
+                    return False
+
+                # Gráficos
+                # Resumen
+                y -= 20
+                if estado_reporte['img_resumen']:
+                    c.drawString(50, y, "Resumen General")
+                    y -= 210
+                    dibujar_imagen(estado_reporte['img_resumen'], 50, y, 500, 200)
+                    y -= 30
+                
+                if y < 250: c.showPage(); y = height - 50
+
+                # Productos
+                if estado_reporte['img_productos']:
+                    c.drawString(50, y, "Productos Más Vendidos")
+                    y -= 210
+                    dibujar_imagen(estado_reporte['img_productos'], 50, y, 500, 200)
+                    y -= 30
+
+                if y < 250: c.showPage(); y = height - 50
+                
+                # Ventas Hora
+                if estado_reporte['img_horas']:
+                     c.drawString(50, y, "Ventas por Hora")
+                     y -= 210
+                     dibujar_imagen(estado_reporte['img_horas'], 50, y, 500, 200)
+                     y -= 30
+
+                if y < 250: c.showPage(); y = height - 50
+
+                # Eficiencia
+                if estado_reporte['img_eficiencia']:
+                     c.drawString(50, y, "Eficiencia de Cocina")
+                     y -= 210
+                     dibujar_imagen(estado_reporte['img_eficiencia'], 50, y, 500, 200)
+                     y -= 30
+
+                c.save()
+                
+                # Mostrar confirmación
+                page.snack_bar = ft.SnackBar(ft.Text(f"Reporte guardado en: {e.path}"))
+                page.snack_bar.open = True
+                page.update()
+
+            except Exception as ex:
+                page.snack_bar = ft.SnackBar(ft.Text(f"Error al guardar PDF: {ex}"))
+                page.snack_bar.open = True
+                page.update()
+                print(f"Error PDF: {ex}")
+
+    file_picker = ft.FilePicker(on_result=guardar_pdf)
+    page.overlay.append(file_picker)
+
+    def exportar_pdf_click(e):
+        # Abrir diálogo para guardar archivo
+        file_picker.save_file(
+            dialog_title="Guardar Reporte como PDF",
+            file_name=f"Reporte_{estado_reporte['tipo']}_{estado_reporte['fecha'].replace(':', '-')}.pdf",
+            allowed_extensions=["pdf"]
+        )
+
+    # --- FIN EXPORTAR PDF ---
     contenedor_reporte = ft.Container(
         content=ft.Column(spacing=10),
         bgcolor=ft.Colors.BLUE_GREY_900,
@@ -299,6 +413,13 @@ def crear_vista_reportes(backend_service, on_update_ui, page):
 
             # --- FIN CALCULAR EFICIENCIA DE COCINA ---
 
+
+            # --- GUARDAR DATOS EN ESTADO PARA PDF ---
+            estado_reporte["tipo"] = tipo
+            estado_reporte["fecha"] = fecha_str
+            estado_reporte["textos"] = [] # Se llenará abajo
+            # ----------------------------------------
+
             # Limpiar contenedor general (solo los elementos de texto existentes)
             controles_texto = []
             controles_texto.append(ft.Text(f"Reporte {tipo} - {fecha_str}", size=20, weight=ft.FontWeight.BOLD))
@@ -323,6 +444,13 @@ def crear_vista_reportes(backend_service, on_update_ui, page):
             if horas_con_venta:
                 for hora_str, total in sorted(horas_con_venta.items()):
                     controles_texto.append(ft.Text(f"Hora {hora_str.zfill(2)}:00 - ${total:.2f}"))
+
+            # --- LLENAR ESTADO DE TEXTOS PARA PDF ---
+            # Extraemos el valor string de los controles de texto para el PDF
+            for control in controles_texto:
+                if isinstance(control, ft.Text):
+                    estado_reporte["textos"].append(control.value)
+            # ----------------------------------------
             else:
                 controles_texto.append(ft.Text("No hubo ventas en esta fecha.", size=14, italic=True))
 
@@ -337,6 +465,7 @@ def crear_vista_reportes(backend_service, on_update_ui, page):
                 fig_resumen.update_layout(title_text='Resumen General', height=300)
                 # Convertir a bytes y actualizar imagen
                 img_bytes_resumen = fig_resumen.to_image(format="png", width=600, height=300, scale=1)
+                estado_reporte["img_resumen"] = img_bytes_resumen # Guardar para PDF
                 imagen_resumen.src_base64 = base64.b64encode(img_bytes_resumen).decode('utf-8')
             else:
                 imagen_resumen.src_base64 = "" # Limpiar si no hay datos
@@ -351,6 +480,7 @@ def crear_vista_reportes(backend_service, on_update_ui, page):
                 fig_pv.update_layout(height=300)
                 # Convertir a bytes y actualizar imagen
                 img_bytes_pv = fig_pv.to_image(format="png", width=600, height=300, scale=1)
+                estado_reporte["img_productos"] = img_bytes_pv # Guardar para PDF
                 imagen_productos_vendidos.src_base64 = base64.b64encode(img_bytes_pv).decode('utf-8')
             else:
                  imagen_productos_vendidos.src_base64 = "" # Limpiar si no hay datos
@@ -365,6 +495,7 @@ def crear_vista_reportes(backend_service, on_update_ui, page):
                 fig_hora.update_layout(title='Ventas por Hora', xaxis_title='Hora del Día', yaxis_title='Ventas ($)', height=300)
                 # Convertir a bytes y actualizar imagen
                 img_bytes_hora = fig_hora.to_image(format="png", width=600, height=300, scale=1)
+                estado_reporte["img_horas"] = img_bytes_hora # Guardar para PDF
                 imagen_ventas_hora.src_base64 = base64.b64encode(img_bytes_hora).decode('utf-8')
             else:
                  imagen_ventas_hora.src_base64 = "" # Limpiar si no hay datos
@@ -383,6 +514,7 @@ def crear_vista_reportes(backend_service, on_update_ui, page):
                 fig_eficiencia.update_layout(height=300)
                 # Convertir a bytes y actualizar imagen
                 img_bytes_eficiencia = fig_eficiencia.to_image(format="png", width=600, height=300, scale=1)
+                estado_reporte["img_eficiencia"] = img_bytes_eficiencia # Guardar para PDF
                 imagen_eficiencia_cocina.src_base64 = base64.b64encode(img_bytes_eficiencia).decode('utf-8')
                 texto_eficiencia_cocina.value = f"Promedio: {promedio_cocina_min:.2f} minutos"
             else:
@@ -529,6 +661,12 @@ def crear_vista_reportes(backend_service, on_update_ui, page):
                 "Actualizar reporte",
                 on_click=actualizar_reporte,
                 style=ft.ButtonStyle(bgcolor=ft.Colors.GREEN_700, color=ft.Colors.WHITE)
+            ),
+            ft.ElevatedButton(
+                "Exportar a PDF",
+                icon=ft.Icons.PICTURE_AS_PDF,
+                on_click=exportar_pdf_click,
+                style=ft.ButtonStyle(bgcolor=ft.Colors.RED_700, color=ft.Colors.WHITE)
             ),
             ft.Divider(),
             contenedor_reporte, # Contenedor del reporte general (ahora incluye imágenes de gráficos)
