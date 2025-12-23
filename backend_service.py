@@ -30,7 +30,12 @@ class BackendService:
             "notas": notas
         }
         r = requests.post(f"{self.base_url}/pedidos", json=payload)
-        r.raise_for_status()
+        if r.status_code != 200:
+            try:
+                error_detail = r.json().get('detail', r.text)
+            except ValueError:
+                error_detail = r.text
+            raise Exception(f"{error_detail}") # Solo el mensaje limpio
         return r.json()
 
     # === MÉTODO: obtener_pedidos_activos ===

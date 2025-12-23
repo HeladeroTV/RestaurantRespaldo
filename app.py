@@ -600,6 +600,27 @@ def crear_panel_gestion(backend_service, menu, on_update_ui, page, primary_color
             threading.Thread(target=reproducir_sonido_pedido, daemon=True).start()
         except Exception as ex:
             print(f"Error al confirmar pedido: {ex}")
+            # --- MOSTRAR ERROR AL USUARIO CON ALERT DIALOG ---
+            msg_error = str(ex)
+            
+            # Función para cerrar el diálogo
+            def cerrar_alerta_stock(e):
+                page.close(dlg_alerta)
+
+            # Crear el diálogo
+            dlg_alerta = ft.AlertDialog(
+                title=ft.Text("⚠️ No se puede tomar la orden", color="red"),
+                content=ft.Text(f"{msg_error}", size=16),
+                actions=[
+                    ft.TextButton("Entendido", on_click=cerrar_alerta_stock),
+                ],
+                actions_alignment=ft.MainAxisAlignment.END,
+            )
+            
+            # Utilizando el método moderno de Flet para abrir diálogos
+            page.open(dlg_alerta)
+            page.update()
+            # --- FIN MOSTRAR ERROR ---
     asignar_btn.on_click = asignar_cliente
     agregar_item_btn.on_click = agregar_item_pedido
     eliminar_ultimo_btn.on_click = eliminar_ultimo_item

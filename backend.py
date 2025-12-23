@@ -107,6 +107,59 @@ def obtener_menu(conn: psycopg2.extensions.connection = Depends(get_db)):
 @app.post("/pedidos", response_model=PedidoResponse)
 def crear_pedido(pedido: PedidoCreate, conn: psycopg2.extensions.connection = Depends(get_db)):
     with conn.cursor() as cursor:
+        # --- NUEVA LÓGICA: VERIFICAR Y CONSUMIR INGREDIENTES ---
+        
+        # 1. Agrupar items por nombre para calcular cantidades totales
+        items_agrupados = {}
+        for item in pedido.items:
+            nombre_item = item['nombre']
+            if nombre_item in items_agrupados:
+                items_agrupados[nombre_item] += 1
+            else:
+                items_agrupados[nombre_item] = 1
+
+        # 2. Verificar stock de todos los ingredientes necesarios
+        ingredientes_a_consumir = [] # Lista de tuplas (ingrediente_id, cantidad_a_consumir, nombre_ingrediente)
+        
+        for nombre_item, cantidad_pedido in items_agrupados.items():
+            # Buscar si el ítem del pedido tiene una receta asociada
+            cursor.execute("""
+                SELECT r.id
+                FROM recetas r
+                WHERE r.nombre_plato = %s
+            """, (nombre_item,))
+            receta = cursor.fetchone()
+            
+            if receta:
+                # Si tiene receta, obtener los ingredientes necesarios y su stock actual
+                cursor.execute("""
+                    SELECT ir.ingrediente_id, ir.cantidad_necesaria, i.cantidad_disponible, i.nombre as nombre_ingrediente
+                    FROM ingredientes_recetas ir
+                    JOIN inventario i ON ir.ingrediente_id = i.id
+                    WHERE ir.receta_id = %s
+                """, (receta['id'],))
+                
+                ingredientes_recetas = cursor.fetchall()
+                
+                for ing in ingredientes_recetas:
+                    cantidad_total_necesaria = ing['cantidad_necesaria'] * cantidad_pedido
+                    
+                    # VERIFICACION DE STOCK
+                    if ing['cantidad_disponible'] < cantidad_total_necesaria:
+                        # Error: No hay suficiente stock
+                        raise HTTPException(
+                            status_code=400, 
+                            detail=f"No hay suficiente stock de '{ing['nombre_ingrediente']}' para preparar '{nombre_item}'. Disponible: {ing['cantidad_disponible']}, Necesario: {cantidad_total_necesaria}"
+                        )
+                    
+                    # Si hay stock, guardar para consumir después
+                    ingredientes_a_consumir.append({
+                        "id": ing['ingrediente_id'],
+                        "cantidad": cantidad_total_necesaria
+                    })
+
+        # 3. Si pasamos aquí, hay stock suficiente para TODO el pedido. Procedemos a crear el pedido.
+
         numero_app = None
         if pedido.mesa_numero == 99:
             cursor.execute("SELECT MAX(numero_app) FROM pedidos WHERE mesa_numero = 99")
@@ -132,45 +185,16 @@ def crear_pedido(pedido: PedidoCreate, conn: psycopg2.extensions.connection = De
         ))
         
         result = cursor.fetchone()
-        
-        # --- NUEVA LÓGICA: CONSUMIR INGREDIENTES DE LAS RECETAS (MANEJANDO CANTIDAD DEL PEDIDO) ---
-        # Suponiendo que 'cursor' es el cursor de la conexión activa en crear_pedido
-        # Agrupar items por nombre para calcular cantidades totales
-        items_agrupados = {}
-        for item in pedido.items:
-            nombre_item = item['nombre']
-            if nombre_item in items_agrupados:
-                items_agrupados[nombre_item] += 1
-            else:
-                items_agrupados[nombre_item] = 1
 
-        for nombre_item, cantidad_pedido in items_agrupados.items():
-            # Buscar si el ítem del pedido tiene una receta asociada
+        # 4. Consumir el stock (Actualizar inventario)
+        # Iterar sobre la lista de ingredientes validados
+        for consumo in ingredientes_a_consumir:
             cursor.execute("""
-                SELECT r.id
-                FROM recetas r
-                WHERE r.nombre_plato = %s
-            """, (nombre_item,))
-            receta = cursor.fetchone()
-            if receta:
-                # Si tiene receta, obtener los ingredientes necesarios
-                cursor.execute("""
-                    SELECT ir.ingrediente_id, ir.cantidad_necesaria
-                    FROM ingredientes_recetas ir
-                    WHERE ir.receta_id = %s
-                """, (receta['id'],))
-                for ing in cursor.fetchall():
-                    # Calcular cantidad total a consumir basada en la cantidad del pedido
-                    cantidad_a_consumir = ing['cantidad_necesaria'] * cantidad_pedido
-                    # Restar la cantidad necesaria del inventario
-                    # OJO: Esta operación simple puede causar cantidades negativas si no hay suficiente stock.
-                    # En una implementación robusta, se debería verificar el stock antes de restar
-                    # o manejar el error si la cantidad disponible es menor que la necesaria.
-                    cursor.execute("""
-                        UPDATE inventario
-                        SET cantidad_disponible = cantidad_disponible - %s
-                        WHERE id = %s
-                    """, (cantidad_a_consumir, ing['ingrediente_id']))
+                UPDATE inventario
+                SET cantidad_disponible = cantidad_disponible - %s
+                WHERE id = %s
+            """, (consumo['cantidad'], consumo['id']))
+            
         # --- FIN NUEVA LÓGICA ---
         
         conn.commit()
