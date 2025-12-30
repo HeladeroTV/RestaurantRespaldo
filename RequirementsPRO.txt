@@ -1,0 +1,8 @@
+flet==0.23.3  # o la versión específica que hayas usado antes si es más estable
+requests
+fastapi
+uvicorn[standard]  # Incluye uvicorn y sus dependencias recomendadas
+psycopg2-binary  # Usualmente se prefiere psycopg2-binary para instalación más sencilla
+pydantic
+plotly
+reportlab
